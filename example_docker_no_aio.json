@@ -1,0 +1,14 @@
+[
+  {
+    "status": "no_ai_overview",
+    "query": "what is docker",
+    "url": "https://docs.docker.com/get-started/docker-overview/",
+    "message": "AI Overview не найден для запроса \"what is docker\"",
+    "ai_overview_status": "organic_fallback",
+    "recommendations": [
+      "Google не сгенерировал AI Overview для этого запроса.",
+      "Попробуйте переформулировать запрос.",
+      "Не все запросы вызывают AI Overview."
+    ]
+  }
+]
