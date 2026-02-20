@@ -1,0 +1,471 @@
+{
+  "name": "TZ",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "analyze",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "54a45c11-af01-4128-a6ec-16d1d24e9e83",
+      "name": "Webhook",
+      "webhookId": "a825a449-71a2-430f-bf15-a202c10a5d94"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\n\n// Достаём из body если пришло через webhook\nconst body = input.body || input;\n\nconst query = (body.query || '').toString().trim();\nconst url = (body.url || '').toString().trim();\n\nif (!query) {\n  throw new Error('Нужен параметр \"query\"');\n}\nif (!url) {\n  throw new Error('Нужен параметр \"url\"');\n}\n\nreturn [{\n  json: {\n    query: query,\n    url: url,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ],
+      "id": "3b220e45-68a4-4d8c-bd6f-cf4803823a5a",
+      "name": "Validate Input"
+    },
+    {
+      "parameters": {
+        "url": "https://serpapi.com/search.json",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "engine",
+              "value": "google"
+            },
+            {
+              "name": "q",
+              "value": "={{ $json.query }}"
+            },
+            {
+              "name": "api_key",
+              "value": "7f12be45933d4461c735dd58d59360d67309e2adbbd227268676a92a23ec69a7"
+            },
+            {
+              "name": "hl",
+              "value": "en"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        448,
+        0
+      ],
+      "id": "30630641-50a4-48ca-9469-227562cb8a60",
+      "name": "Get AI Overview",
+      "retryOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const serpResponse = $input.first().json;\nconst prevData = $('Validate Input').first().json;\n\nlet aiOverviewText = '';\nlet status = 'not_found';\n\nfunction parseBlock(block) {\n  if (typeof block === 'string') return block;\n  if (block.snippet) return block.snippet;\n  if (block.text) return block.text;\n  if (block.list) {\n    return block.list.map(item => {\n      if (typeof item === 'string') return '- ' + item;\n      if (item.title && item.description) return '- ' + item.title + ': ' + item.description;\n      if (item.title) return '- ' + item.title;\n      if (item.snippet) return '- ' + item.snippet;\n      return '- ' + JSON.stringify(item);\n    }).join('\\n');\n  }\n  if (block.items) {\n    return block.items.map(item => {\n      if (typeof item === 'string') return '- ' + item;\n      if (item.title) return '- ' + item.title;\n      return '- ' + JSON.stringify(item);\n    }).join('\\n');\n  }\n  return '';\n}\n\nif (serpResponse.ai_overview) {\n  const aio = serpResponse.ai_overview;\n\n  if (typeof aio === 'string') {\n    aiOverviewText = aio;\n  } else if (aio.text) {\n    aiOverviewText = aio.text;\n  } else if (aio.text_blocks) {\n    aiOverviewText = aio.text_blocks\n      .map(parseBlock)\n      .filter(Boolean)\n      .join('\\n\\n');\n  } else if (aio.blocks) {\n    aiOverviewText = aio.blocks\n      .map(parseBlock)\n      .filter(Boolean)\n      .join('\\n\\n');\n  } else if (aio.page_token) {\n    // page_token без текста — фоллбэк ниже\n  } else {\n    aiOverviewText = JSON.stringify(aio);\n  }\n\n  if (aiOverviewText.trim().length > 0) {\n    status = 'found';\n  }\n}\n\n// Фоллбэк: featured snippet / answer box\nif (!aiOverviewText && serpResponse.answer_box) {\n  aiOverviewText = serpResponse.answer_box.snippet\n    || serpResponse.answer_box.answer\n    || serpResponse.answer_box.result\n    || '';\n  if (aiOverviewText) status = 'answer_box_fallback';\n}\n\n// Фоллбэк: organic результаты\nif (!aiOverviewText) {\n  const organic = serpResponse.organic_results || [];\n  aiOverviewText = organic.slice(0, 3)\n    .map(r => `${r.title}: ${r.snippet || ''}`)\n    .join('\\n\\n');\n  if (aiOverviewText) status = 'organic_fallback';\n}\n\nif (serpResponse.error) {\n  status = 'api_error';\n}\n\nreturn [{\n  json: {\n    query: prevData.query,\n    url: prevData.url,\n    timestamp: prevData.timestamp,\n    ai_overview_text: aiOverviewText.trim(),\n    ai_overview_status: status,\n    page_token: serpResponse.ai_overview?.page_token || null\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        656,
+        0
+      ],
+      "id": "21a0efa5-7921-408b-b092-bc3ef40b6df9",
+      "name": "Extract AI Overview"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "02144c6a-a33a-4c66-9495-84864028b474",
+              "leftValue": "={{ $json.ai_overview_status }}",
+              "rightValue": "found",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        864,
+        0
+      ],
+      "id": "22928695-f0dc-4514-ae40-68fa2619e5bc",
+      "name": "Has AI Overview?"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $('Extract AI Overview').first().json;\n\nreturn [{\n  json: {\n    status: 'no_ai_overview',\n    query: data.query,\n    url: data.url,\n    message: 'AI Overview не найден для запроса \"' + data.query + '\"',\n    ai_overview_status: data.ai_overview_status,\n    recommendations: [\n      'Google не сгенерировал AI Overview для этого запроса.',\n      'Попробуйте переформулировать запрос.',\n      'Не все запросы вызывают AI Overview.'\n    ]\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        160
+      ],
+      "id": "3dbde9b9-2c45-4ba0-a2c5-091b1367aa25",
+      "name": "No AIO Response"
+    },
+    {
+      "parameters": {
+        "url": "=https://r.jina.ai/{{ $json.url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "text/plain"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1104,
+        -96
+      ],
+      "id": "d7a5f350-917c-46a5-9cb7-3683351f54a2",
+      "name": "Fetch Page Content",
+      "retryOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const pageRaw = $input.first().json;\nconst aioData = $('Extract AI Overview').first().json;\n\n// Получаем текст страницы\nlet pageContent = '';\nif (typeof pageRaw === 'string') {\n  pageContent = pageRaw;\n} else if (pageRaw.data) {\n  pageContent = typeof pageRaw.data === 'string' ? pageRaw.data : JSON.stringify(pageRaw.data);\n} else {\n  pageContent = JSON.stringify(pageRaw);\n}\n\n// Убираем HTML теги если есть\npageContent = pageContent\n  .replace(/<script[\\s\\S]*?<\\/script>/gi, '')\n  .replace(/<style[\\s\\S]*?<\\/style>/gi, '')\n  .replace(/<[^>]+>/g, ' ')\n  .replace(/\\s+/g, ' ')\n  .trim();\n\n// Обрезаем чтобы не тратить много токенов\nif (pageContent.length > 12000) {\n  pageContent = pageContent.substring(0, 12000) + '\\n[...текст обрезан...]';\n}\n\nlet aioText = aioData.ai_overview_text;\nif (aioText.length > 4000) {\n  aioText = aioText.substring(0, 4000);\n}\n\nreturn [{\n  json: {\n    query: aioData.query,\n    url: aioData.url,\n    timestamp: aioData.timestamp,\n    ai_overview_text: aioText,\n    ai_overview_status: aioData.ai_overview_status,\n    page_content: pageContent,\n    page_content_length: pageContent.length\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1312,
+        -96
+      ],
+      "id": "c9ca573b-6773-44cc-82a6-ba543900099a",
+      "name": "Prepare Data"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=Search query: {{ $('Prepare Data').first().json.query }}\n\nAI Overview text:\n\"\"\"\n{{ $('Prepare Data').first().json.ai_overview_text }}\n\"\"\"\n\nExtract all key entities and facts. Return this JSON structure:\n{\n  \"entities\": [\n    {\"name\": \"entity name\", \"type\": \"person|organization|product|concept|technology|metric\", \"context\": \"how it is mentioned\"}\n  ],\n  \"facts\": [\n    {\"statement\": \"specific claim or fact\", \"category\": \"statistic|definition|recommendation|comparison|cause_effect|step\", \"importance\": \"high|medium|low\"}\n  ],\n  \"main_topics\": [\"topic1\", \"topic2\"],\n  \"key_questions_answered\": [\"what question does the AI Overview answer\"]\n}"
+            },
+            {
+              "role": "system",
+              "content": "You are an SEO analyst. Extract key entities and facts from the AI Overview text. Respond ONLY with valid JSON, no markdown wrapping, no extra text."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        1520,
+        -96
+      ],
+      "id": "69cbfa52-4189-4fe4-9069-ddb86830b273",
+      "name": "LLM Extract Entities",
+      "credentials": {
+        "openAiApi": {
+          "id": "6aYad8lj9W2uZkG6",
+          "name": "n8n free OpenAI API credits"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const llmResponse = $input.first().json;\nconst prevData = $('Prepare Data').first().json;\n\nlet entitiesFacts;\n\ntry {\n  // Достаём текст из нового формата OpenAI Responses API\n  let content = '';\n  \n  if (llmResponse.output && Array.isArray(llmResponse.output)) {\n    content = llmResponse.output?.[0]?.content?.[0]?.text || '';\n  } else if (llmResponse.content && Array.isArray(llmResponse.content)) {\n    content = llmResponse.content?.[0]?.text || '';\n  } else if (llmResponse.message?.content) {\n    content = llmResponse.message.content;\n  } else if (llmResponse.choices?.[0]?.message?.content) {\n    content = llmResponse.choices[0].message.content;\n  }\n\n  content = content.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n  entitiesFacts = JSON.parse(content);\n\n} catch (e) {\n  entitiesFacts = {\n    entities: [],\n    facts: [],\n    main_topics: [],\n    key_questions_answered: [],\n    error: e.message\n  };\n}\n\nreturn [{\n  json: {\n    query: prevData.query,\n    url: prevData.url,\n    timestamp: prevData.timestamp,\n    ai_overview_text: prevData.ai_overview_text,\n    ai_overview_status: prevData.ai_overview_status,\n    page_content: prevData.page_content,\n    page_content_length: prevData.page_content_length,\n    entities_facts: entitiesFacts\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1872,
+        -96
+      ],
+      "id": "c3f3e41a-9956-4f0a-9976-b584fb22f5c8",
+      "name": "Parse Entities"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=Compare the web page content with AI Overview data and find gaps.\n\nSearch query: {{ $json.query }}\n\nEntities and facts from AI Overview:\n{{ JSON.stringify($json.entities_facts) }}\n\nPage content ({{ $json.url }}):\n\"\"\"\n{{ $json.page_content }}\n\"\"\"\n\nReturn this JSON:\n{\n  \"coverage_score\": 0-100,\n  \"gaps\": [\n    {\n      \"id\": \"gap_1\",\n      \"entity_or_fact\": \"specific entity or fact from AI Overview\",\n      \"status\": \"missing|weak|partial\",\n      \"details\": \"explanation of the gap\",\n      \"importance\": \"high|medium|low\"\n    }\n  ],\n  \"recommendations\": [\n    {\n      \"priority\": 1,\n      \"gap_id\": \"gap_1\",\n      \"title\": \"short title\",\n      \"description\": \"what to add or change on the page\",\n      \"implementation_example\": \"specific text example to add\"\n    }\n  ],\n  \"strengths\": [\"what is already well covered\"],\n  \"summary\": \"2-3 sentence summary\"\n}\n\nRequirements:\n- Provide 5 to 10 recommendations\n- Each recommendation MUST reference a specific gap_id\n- Be specific and actionable\n- Prioritize by impact on AI Overview citation"
+            },
+            {
+              "role": "system",
+              "content": "You are an SEO strategist specializing in optimizing content for maximum citation in Google AI Overview. Respond ONLY with valid JSON, no markdown."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        2080,
+        -96
+      ],
+      "id": "a8bd3f10-7f49-420e-ba1d-8831147d15ff",
+      "name": "LLM Gap Analysis",
+      "credentials": {
+        "openAiApi": {
+          "id": "6aYad8lj9W2uZkG6",
+          "name": "n8n free OpenAI API credits"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const llmResponse = $input.first().json;\nconst prevData = $('Parse Entities').first().json;\n\nlet analysis;\n\ntry {\n  let content = '';\n\n  if (llmResponse.output && Array.isArray(llmResponse.output)) {\n    content = llmResponse.output?.[0]?.content?.[0]?.text || '';\n  } else if (llmResponse.content && Array.isArray(llmResponse.content)) {\n    content = llmResponse.content?.[0]?.text || '';\n  } else if (llmResponse.message?.content) {\n    content = llmResponse.message.content;\n  } else if (llmResponse.choices?.[0]?.message?.content) {\n    content = llmResponse.choices[0].message.content;\n  }\n\n  content = content.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n  analysis = JSON.parse(content);\n\n} catch (e) {\n  analysis = {\n    coverage_score: 0,\n    gaps: [],\n    recommendations: [],\n    strengths: [],\n    summary: 'Parse error: ' + e.message\n  };\n}\n\nreturn [{\n  json: {\n    query: prevData.query,\n    url: prevData.url,\n    timestamp: prevData.timestamp,\n    ai_overview_text: prevData.ai_overview_text,\n    ai_overview_status: prevData.ai_overview_status,\n    page_content: prevData.page_content,\n    page_content_length: prevData.page_content_length,\n    entities_facts: prevData.entities_facts,\n    gaps: analysis.gaps || [],\n    recommendations: analysis.recommendations || [],\n    coverage_score: analysis.coverage_score || 0,\n    strengths: analysis.strengths || [],\n    summary: analysis.summary || ''\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2432,
+        -96
+      ],
+      "id": "835a4bbc-73ef-4b78-b7f9-5b52545414fd",
+      "name": "Parse Gap Analysis"
+    },
+    {
+      "parameters": {
+        "operation": "set",
+        "key": "={{ $json.timestamp }}",
+        "value": "={{ JSON.stringify($json) }}"
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        2640,
+        -96
+      ],
+      "id": "cf6d1d1a-95ab-4a7c-97ea-5df237303d32",
+      "name": "Save to Redis",
+      "credentials": {
+        "redis": {
+          "id": "4yhEKtQM3THuPuTG",
+          "name": "Redis account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $('Parse Gap Analysis').first().json;\n\nreturn [{\n  json: {\n    status: 'success',\n    query: data.query,\n    url: data.url,\n    timestamp: data.timestamp,\n\n    ai_overview: {\n      status: data.ai_overview_status,\n      text: data.ai_overview_text\n    },\n\n    entities_and_facts: data.entities_facts,\n\n    gap_analysis: {\n      coverage_score: data.coverage_score,\n      total_gaps: (data.gaps || []).length,\n      gaps: data.gaps,\n      strengths: data.strengths\n    },\n\n    recommendations: data.recommendations,\n    summary: data.summary\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2864,
+        -96
+      ],
+      "id": "41d4b5fb-ada1-4cd6-976f-0a93640e0633",
+      "name": "Format Response"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Input": {
+      "main": [
+        [
+          {
+            "node": "Get AI Overview",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get AI Overview": {
+      "main": [
+        [
+          {
+            "node": "Extract AI Overview",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract AI Overview": {
+      "main": [
+        [
+          {
+            "node": "Has AI Overview?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has AI Overview?": {
+      "main": [
+        [
+          {
+            "node": "Fetch Page Content",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No AIO Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No AIO Response": {
+      "main": [
+        []
+      ]
+    },
+    "Fetch Page Content": {
+      "main": [
+        [
+          {
+            "node": "Prepare Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Data": {
+      "main": [
+        [
+          {
+            "node": "LLM Extract Entities",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM Extract Entities": {
+      "main": [
+        [
+          {
+            "node": "Parse Entities",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Entities": {
+      "main": [
+        [
+          {
+            "node": "LLM Gap Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM Gap Analysis": {
+      "main": [
+        [
+          {
+            "node": "Parse Gap Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Gap Analysis": {
+      "main": [
+        [
+          {
+            "node": "Save to Redis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save to Redis": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Response": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "a314df0e-d3f7-407e-b0e0-cfeca754865f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "020419ea3201d6cf64de9f7441b9c0ec5665b7d1573e7fddc10a87950452b562"
+  },
+  "id": "8Nq1aVMYqK4j70Dj",
+  "tags": []
+}
