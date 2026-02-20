@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Overview Gap Analyzer</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --border: #1e1e2e;
+    --accent: #7c6aff;
+    --accent2: #00e5c0;
+    --text: #e8e8f0;
+    --muted: #6b6b80;
+    --success: #00e5c0;
+    --warning: #ffb547;
+    --danger: #ff6b6b;
+  }
+
+  body {
+    font-family: 'DM Mono', monospace;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Background grid */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: 
+      linear-gradient(rgba(124,106,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(124,106,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 60px 24px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Header */
+  .header {
+    margin-bottom: 56px;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(124,106,255,0.1);
+    border: 1px solid rgba(124,106,255,0.3);
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 4px 12px;
+    border-radius: 20px;
+    margin-bottom: 20px;
+  }
+
+  .badge::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    background: var(--accent);
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(32px, 5vw, 52px);
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    margin-bottom: 16px;
+  }
+
+  h1 span {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .subtitle {
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.7;
+    max-width: 520px;
+  }
+
+  /* Form */
+  .form-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 32px;
+    margin-bottom: 32px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .form-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0.5;
+  }
+
+  .form-group {
+    margin-bottom: 20px;
+  }
+
+  label {
+    display: block;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+
+  input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    color: var(--text);
+    transition: border-color 0.2s, box-shadow 0.2s;
+    outline: none;
+  }
+
+  input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(124,106,255,0.1);
+  }
+
+  input::placeholder {
+    color: var(--muted);
+  }
+
+  .btn {
+    width: 100%;
+    padding: 14px 24px;
+    background: linear-gradient(135deg, var(--accent), #5a4de0);
+    border: none;
+    border-radius: 8px;
+    font-family: 'Syne', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: white;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s;
+    margin-top: 8px;
+  }
+
+  .btn:hover { opacity: 0.9; }
+  .btn:active { transform: scale(0.99); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* Loading */
+  .loading {
+    display: none;
+    text-align: center;
+    padding: 48px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  .loading.visible { display: block; }
+
+  .spinner {
+    width: 32px;
+    height: 32px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 16px;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Results */
+  .results { display: none; }
+  .results.visible { display: block; }
+
+  .score-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 32px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 32px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .score-circle {
+    flex-shrink: 0;
+    width: 100px;
+    height: 100px;
+    position: relative;
+  }
+
+  .score-circle svg {
+    transform: rotate(-90deg);
+    width: 100px;
+    height: 100px;
+  }
+
+  .score-circle .track {
+    fill: none;
+    stroke: var(--border);
+    stroke-width: 6;
+  }
+
+  .score-circle .fill {
+    fill: none;
+    stroke: var(--accent2);
+    stroke-width: 6;
+    stroke-linecap: round;
+    stroke-dasharray: 283;
+    stroke-dashoffset: 283;
+    transition: stroke-dashoffset 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .score-number {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Syne', sans-serif;
+    font-size: 24px;
+    font-weight: 800;
+  }
+
+  .score-info h2 {
+    font-family: 'Syne', sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+
+  .score-info p {
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  .aio-text {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+    font-size: 13px;
+    line-height: 1.8;
+    color: #c0c0d0;
+  }
+
+  .aio-text .label {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 12px;
+    font-weight: 500;
+  }
+
+  .section-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .section-title .count {
+    background: rgba(124,106,255,0.15);
+    color: var(--accent);
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 20px;
+  }
+
+  /* Gap cards */
+  .gaps-list, .recs-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+
+  .gap-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .gap-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+  }
+
+  .gap-card.missing::before { background: var(--danger); }
+  .gap-card.weak::before { background: var(--warning); }
+  .gap-card.partial::before { background: var(--accent); }
+
+  .gap-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+
+  .gap-entity {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    line-height: 1.5;
+  }
+
+  .status-badge {
+    flex-shrink: 0;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 4px;
+  }
+
+  .status-badge.missing { background: rgba(255,107,107,0.15); color: var(--danger); }
+  .status-badge.weak { background: rgba(255,181,71,0.15); color: var(--warning); }
+  .status-badge.partial { background: rgba(124,106,255,0.15); color: var(--accent); }
+
+  .gap-details {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  /* Recommendation cards */
+  .rec-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+
+  .rec-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+
+  .rec-number {
+    width: 28px;
+    height: 28px;
+    background: linear-gradient(135deg, var(--accent), #5a4de0);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Syne', sans-serif;
+    font-size: 12px;
+    font-weight: 800;
+    flex-shrink: 0;
+  }
+
+  .rec-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  .rec-desc {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.6;
+    margin-bottom: 12px;
+  }
+
+  .rec-example {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 12px;
+    color: var(--accent2);
+    line-height: 1.6;
+    font-style: italic;
+  }
+
+  .rec-example::before {
+    content: '// Example: ';
+    color: var(--muted);
+    font-style: normal;
+  }
+
+  /* No AIO */
+  .no-aio {
+    background: var(--surface);
+    border: 1px solid rgba(255,181,71,0.3);
+    border-radius: 16px;
+    padding: 40px;
+    text-align: center;
+  }
+
+  .no-aio-icon {
+    font-size: 40px;
+    margin-bottom: 16px;
+  }
+
+  .no-aio h3 {
+    font-family: 'Syne', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--warning);
+    margin-bottom: 8px;
+  }
+
+  .no-aio p {
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  /* Error */
+  .error-msg {
+    background: rgba(255,107,107,0.08);
+    border: 1px solid rgba(255,107,107,0.3);
+    border-radius: 12px;
+    padding: 20px;
+    color: var(--danger);
+    font-size: 13px;
+    display: none;
+    margin-bottom: 24px;
+  }
+
+  .error-msg.visible { display: block; }
+
+  /* Strengths */
+  .strengths {
+    background: rgba(0,229,192,0.05);
+    border: 1px solid rgba(0,229,192,0.2);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 24px;
+  }
+
+  .strengths .label {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent2);
+    margin-bottom: 12px;
+    font-weight: 500;
+  }
+
+  .strength-item {
+    font-size: 12px;
+    color: #a0c8b8;
+    padding: 4px 0;
+    padding-left: 16px;
+    position: relative;
+    line-height: 1.6;
+  }
+
+  .strength-item::before {
+    content: '✓';
+    position: absolute;
+    left: 0;
+    color: var(--accent2);
+  }
+
+  @media (max-width: 600px) {
+    .score-card { flex-direction: column; }
+    .container { padding: 40px 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header class="header">
+    <div class="badge">AI-powered SEO tool</div>
+    <h1>AI Overview<br><span>Gap Analyzer</span></h1>
+    <p class="subtitle">Find out what's missing on your page compared to Google's AI Overview and get actionable recommendations to improve your citation chances.</p>
+  </header>
+
+  <div class="form-card">
+    <div class="form-group">
+      <label>Search Query</label>
+      <input type="text" id="query" placeholder="e.g. what is kubernetes" />
+    </div>
+    <div class="form-group">
+      <label>Page URL</label>
+      <input type="text" id="url" placeholder="e.g. https://kubernetes.io/docs/concepts/overview/" />
+    </div>
+    <button class="btn" id="analyzeBtn" onclick="analyze()">Analyze Page →</button>
+  </div>
+
+  <div class="error-msg" id="errorMsg"></div>
+
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    Fetching AI Overview and analyzing your page...<br>
+    <span style="font-size:11px;opacity:0.5;margin-top:8px;display:block">This may take 20–30 seconds</span>
+  </div>
+
+  <div class="results" id="results"></div>
+
+</div>
+
+<script>
+const API_URL = 'https://primary-production-0c2e7.up.railway.app/webhook/analyze';
+
+async function analyze() {
+  const query = document.getElementById('query').value.trim();
+  const url = document.getElementById('url').value.trim();
+  const btn = document.getElementById('analyzeBtn');
+  const loading = document.getElementById('loading');
+  const results = document.getElementById('results');
+  const errorMsg = document.getElementById('errorMsg');
+
+  if (!query || !url) {
+    showError('Please fill in both fields.');
+    return;
+  }
+
+  btn.disabled = true;
+  loading.classList.add('visible');
+  results.classList.remove('visible');
+  results.innerHTML = '';
+  errorMsg.classList.remove('visible');
+
+  try {
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, url })
+    });
+
+    if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
+    const data = await response.json();
+    renderResults(data);
+  } catch (err) {
+    showError('Request failed: ' + err.message + '. Please try again.');
+  } finally {
+    btn.disabled = false;
+    loading.classList.remove('visible');
+  }
+}
+
+function showError(msg) {
+  const el = document.getElementById('errorMsg');
+  el.textContent = msg;
+  el.classList.add('visible');
+}
+
+function renderResults(data) {
+  const results = document.getElementById('results');
+
+  // No AI Overview case
+  if (data.status === 'no_ai_overview') {
+    results.innerHTML = `
+      <div class="no-aio">
+        <div class="no-aio-icon">🔍</div>
+        <h3>No AI Overview Found</h3>
+        <p>${data.message}</p>
+        <p style="margin-top:8px">Try a different query — not all searches generate an AI Overview.</p>
+      </div>`;
+    results.classList.add('visible');
+    return;
+  }
+
+  const gaps = data.gap_analysis?.gaps || [];
+  const recs = data.recommendations || [];
+  const score = data.gap_analysis?.coverage_score || 0;
+  const strengths = data.gap_analysis?.strengths || [];
+  const summary = data.summary || '';
+  const aioText = data.ai_overview?.text || '';
+
+  // Score circle
+  const circumference = 283;
+  const offset = circumference - (score / 100) * circumference;
+  const scoreColor = score >= 70 ? '#00e5c0' : score >= 40 ? '#ffb547' : '#ff6b6b';
+
+  let html = `
+    <div class="score-card">
+      <div class="score-circle">
+        <svg viewBox="0 0 100 100">
+          <circle class="track" cx="50" cy="50" r="45"/>
+          <circle class="fill" id="scoreFill" cx="50" cy="50" r="45" style="stroke:${scoreColor}"/>
+        </svg>
+        <div class="score-number" style="color:${scoreColor}">${score}</div>
+      </div>
+      <div class="score-info">
+        <h2>Coverage Score</h2>
+        <p>${summary || `Your page covers ${score}% of what Google considers important for this query.`}</p>
+      </div>
+    </div>`;
+
+  // AI Overview text
+  if (aioText) {
+    html += `
+      <div class="aio-text">
+        <div class="label">Google AI Overview</div>
+        ${aioText.replace(/\n/g, '<br>')}
+      </div>`;
+  }
+
+  // Strengths
+  if (strengths.length > 0) {
+    html += `<div class="strengths"><div class="label">What's already good</div>`;
+    strengths.forEach(s => { html += `<div class="strength-item">${s}</div>`; });
+    html += `</div>`;
+  }
+
+  // Gaps
+  if (gaps.length > 0) {
+    html += `<div class="section-title">Content Gaps <span class="count">${gaps.length}</span></div>`;
+    html += `<div class="gaps-list">`;
+    gaps.forEach(gap => {
+      html += `
+        <div class="gap-card ${gap.status}">
+          <div class="gap-header">
+            <div class="gap-entity">${gap.entity_or_fact}</div>
+            <span class="status-badge ${gap.status}">${gap.status}</span>
+          </div>
+          <div class="gap-details">${gap.details}</div>
+        </div>`;
+    });
+    html += `</div>`;
+  }
+
+  // Recommendations
+  if (recs.length > 0) {
+    html += `<div class="section-title">Recommendations <span class="count">${recs.length}</span></div>`;
+    html += `<div class="recs-list">`;
+    recs.forEach(rec => {
+      html += `
+        <div class="rec-card">
+          <div class="rec-header">
+            <div class="rec-number">${rec.priority}</div>
+            <div class="rec-title">${rec.title}</div>
+          </div>
+          <div class="rec-desc">${rec.description}</div>
+          ${rec.implementation_example ? `<div class="rec-example">${rec.implementation_example}</div>` : ''}
+        </div>`;
+    });
+    html += `</div>`;
+  }
+
+  results.innerHTML = html;
+  results.classList.add('visible');
+
+  // Animate score circle
+  setTimeout(() => {
+    const fill = document.getElementById('scoreFill');
+    if (fill) fill.style.strokeDashoffset = offset;
+  }, 100);
+}
+
+// Enter key support
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter') analyze();
+});
+</script>
+</body>
+</html>
